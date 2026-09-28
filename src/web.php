@@ -64,3 +64,27 @@ function web_create_verification(PDO $pdo,array $input): never {
     $qrUrl=rtrim($GLOBALS['config']['app']['base_url'],'/').'/verify.php?token='.urlencode($challenge).'&id='.urlencode($verificationId);
     json_response(['success'=>true,'message'=>'Verification request created','verification_id'=>$verificationId,'app'=>$app['name'],'status'=>'pending','expires_in'=>120,'qr_url'=>$qrUrl,'token'=>$challenge],201);
 }
+
+function web_verification_info(PDO $pdo): never {
+    $token=trim((string)($_GET['token']??''));$id=trim((string)($_GET['id']??''));
+    $s=$pdo->prepare('SELECT v.*,a.name app_name FROM verification_requests v JOIN apps a ON a.id=v.app_id WHERE v.verification_id=? AND v.challenge_hash=? LIMIT 1');
+    $s->execute([$id,hash('sha256',$token)]);$v=$s->fetch();
+    if(!$v) json_response(['success'=>false,'message'=>'Verification request not found'],404);
+    $remaining=max(0,strtotime($v['expires_at'])-time());
+    if($v['status']!=='pending'||$remaining<=0) json_response(['success'=>false,'message'=>'Verification request has expired or is no longer pending'],410);
+    json_response(['success'=>true,'app'=>$v['app_name'],'purpose'=>$v['purpose'],'expires_in'=>$remaining]);
+}
+
+function web_verification_action(PDO $pdo,array $input): never {
+    $token=trim((string)($input['token']??''));$id=trim((string)($input['id']??''));$action=(string)($input['action']??'');
+    if(!in_array($action,['approve','reject'],true)) json_response(['success'=>false,'message'=>'Invalid action'],422);
+    $s=$pdo->prepare('SELECT * FROM verification_requests WHERE verification_id=? AND challenge_hash=? LIMIT 1');
+    $s->execute([$id,hash('sha256',$token)]);$v=$s->fetch();
+    if(!$v) json_response(['success'=>false,'message'=>'Verification request not found'],404);
+    if($v['status']!=='pending'||strtotime($v['expires_at'])<=time()) json_response(['success'=>false,'message'=>'Verification request expired or already completed'],410);
+    $status=$action==='approve'?'approved':'rejected';
+    $u=$pdo->prepare('UPDATE verification_requests SET status=?,approved_at=? WHERE id=? AND status="pending"');
+    $u->execute([$status,$action==='approve'?date('Y-m-d H:i:s'):null,$v['id']]);
+    if($u->rowCount()!==1) json_response(['success'=>false,'message'=>'Request was already completed'],409);
+    json_response(['success'=>true,'message'=>$action==='approve'?'Verification approved':'Verification rejected','verification_id'=>$id,'verified'=>$status==='approved']);
+}
