@@ -23,6 +23,8 @@ function route_request(PDO $pdo,array $config):never{
  if($route==='stats'&&$method==='GET') web_stats($pdo);
  if($route==='my-apps'&&$method==='GET') web_apps($pdo);
  if($route==='create-verification'&&$method==='POST') web_create_verification($pdo,$body);
+ if($route==='verification-info'&&$method==='GET') web_verification_info($pdo);
+ if($route==='verification-action'&&$method==='POST') web_verification_action($pdo,$body);
 
  json_response(['success'=>false,'message'=>'Route not found'],404);
 }
