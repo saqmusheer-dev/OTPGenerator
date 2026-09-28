@@ -1,36 +1,14 @@
 <?php
 declare(strict_types=1);
+session_start();
 
-header('Content-Type: application/json; charset=utf-8');
+$GLOBALS['config'] = require dirname(__DIR__) . '/config.php';
+require dirname(__DIR__) . '/src/bootstrap.php';
+require dirname(__DIR__) . '/src/router.php';
 
-$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
-$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-
-$routes = [
-    ['POST', '/api/v1/otp/send'],
-    ['POST', '/api/v1/otp/verify'],
-    ['GET',  '/api/v1/health'],
-];
-
-if ($path === '/api/v1/health' && $method === 'GET') {
-    echo json_encode([
-        'success' => true,
-        'service' => 'OTPGenerator',
-        'status' => 'ok',
-        'time' => gmdate('c'),
-    ]);
-    exit;
+try {
+    route_request(db(), $GLOBALS['config']);
+} catch (Throwable $e) {
+    error_log($e->getMessage());
+    json_response(['success' => false, 'message' => 'Internal server error'], 500);
 }
-
-if ($method === 'POST' && in_array($path, ['/api/v1/otp/send', '/api/v1/otp/verify'], true)) {
-    http_response_code(501);
-    echo json_encode([
-        'success' => false,
-        'message' => 'OTP endpoint scaffold created. Database, authentication and provider adapters are next.',
-        'endpoint' => $path,
-    ]);
-    exit;
-}
-
-http_response_code(404);
-echo json_encode(['success' => false, 'message' => 'Route not found']);
